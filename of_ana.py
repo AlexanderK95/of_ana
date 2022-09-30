@@ -4,10 +4,7 @@ import cv2 as cv
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-head = "Data/20220921-115719_1_head_cam.mp4"
-gaze = "Data/20220921-115719_1_gaze_cam.mp4"
-
-def calc_of(video):
+def calc_of(video, shouldPlot=False):
     cap = cv.VideoCapture(cv.samples.findFile(video))
     # flow_all = np.zeros([int(cap.get(cv.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv.CAP_PROP_FRAME_HEIGHT)), 2, int(cap.get(cv.CAP_PROP_FRAME_COUNT))])
 
@@ -26,11 +23,11 @@ def calc_of(video):
     # fig, ax = plt.subplots(1,1)
     # plt.ion()
     # plt.show()
-    for i in tqdm(np.arange(int(cap.get(cv.CAP_PROP_FRAME_COUNT)))):
+    for i in np.arange(int(cap.get(cv.CAP_PROP_FRAME_COUNT))):
         # fig.clf()
         ret, frame2 = cap.read()
         if not ret:
-            print('No frames grabbed!')
+            # print('No frames grabbed!')
             break
         next = cv.cvtColor(frame2, cv.COLOR_BGR2GRAY)
         flow = cv.calcOpticalFlowFarneback(prvs, next, None, 0.5, 3, 15, 3, 5, 1.2, 0)
@@ -59,6 +56,55 @@ def calc_of(video):
     # cv.destroyAllWindows()
     # return flow_all, mean_of
     return mean_of
+
+### Settings ###
+data_file = "Stimuli/20220930-134704_1.csv"
+
+width = 512
+height = 512
+
+shouldPlot = True
+
+### Loading Data ###
+df = pd.read_csv(data_file, sep=",")
+
+data_cnt = df.shape[0]
+
+mean_of_head = np.zeros([width, height, 2, data_cnt])
+mean_of_retina = np.zeros([width, height, 2, data_cnt])
+for sm in tqdm(np.arange(data_cnt)):
+    mean_of_head[:,:,:,sm] = calc_of(df['file_head'][sm])
+    mean_of_retina[:,:,:,sm] = calc_of(df['file_gaze'][sm])
+
+    
+
+
+
+if shouldPlot:
+    n = 6
+    samples = df.sample(n=n).index
+    fig, axs = plt.subplots(n, 1, sharex=True, sharey=True)
+    Y, X = np.mgrid[0:512:1, 0:512:1]
+    plt.ion
+    plt.show()
+    print("now Plotting...")
+    for i in np.arange(n):
+        Uh = mean_of_head[:,:,0,samples[i]]
+        Vh = mean_of_head[:,:,1,samples[i]]
+        Ur = mean_of_retina[:,:,0,samples[i]]
+        Vr = mean_of_retina[:,:,1,samples[i]]
+
+        speedH = np.sqrt(Uh**2 + Vh**2)
+        speedR = np.sqrt(Ur**2 + Vr**2)
+        lwH = 5*speedH / speedH.max()
+        lwR = 5*speedR / speedR.max()
+        axs[i].streamplot(X, Y, Uh, Vh, density=[0.5, 1], linewidth=lwH)
+        axs[i].set_title(f"H {samples[i]} (velX {df['velX'][samples[i]]:0.2f}, velY {df['velY'][samples[i]]:0.2f}, VelZ {df['VelZ'][samples[i]]:0.2f}, pitch {df['pitch'][samples[i]]:0.2f}, yaw {df['yaw'][samples[i]]:0.2f}, roll {df['roll'][samples[i]]:0.2f}", fontsize=11)
+        axs[i].streamplot(X+650, Y, Ur, Vr, density=[0.5, 1], linewidth=lwR)
+       
+
+    plt.ylim(512, 0)
+    plt.xlim(0, 512+650)
 
 
 body_df = pd.read_csv("Data/20220921-115719_1_body.csv", sep=",")

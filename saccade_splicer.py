@@ -24,7 +24,7 @@ def derivative2(t, x):
 
 
 ### Settings ###
-file_name = "20220926-142032_5"
+file_name = "20220930-134704_1"
 save_folder = "Stimuli"
 split_length = 0.3      # length of image sequences in seconds
 
@@ -32,7 +32,7 @@ thresh_vel = 400        # velocity threshold for saccade detection in degrees / 
 thresh_acc = 10000      # acceleration threshold for saccade detection degrees / s²
 max_isi = 1             # maximum time between saccades in seconds (isi above that will be excludes for the statistics)
 
-shouldPlot = False
+shouldPlot = True
 
 ### Detecting Saccades ###
 gaze_pos_df = pd.read_csv(f"Data/{file_name}_gaze_hr.csv", sep=",")
@@ -171,6 +171,8 @@ if shouldPlot:
 headingData = pd.DataFrame(columns=["file_head", "file_gaze", "velX", "velY", "VelZ", "pitch", "yaw", "roll"])
 
 saccNr = 0
+
+
 for i in tqdm(np.arange(int(FRAME_COUNT_HEAD))):
     retHead, frameHead = cap_head.read()
     retGaze, frameGaze = cap_gaze.read()
@@ -182,6 +184,20 @@ for i in tqdm(np.arange(int(FRAME_COUNT_HEAD))):
         time0 = head_df["time"][i]
         pos0 = np.array([head_df["pos.x"][i], head_df["pos.y"][i], head_df["pos.z"][i]])
         rot0 = np.array([head_df["rot.x"][i], head_df["rot.y"][i], head_df["rot.z"][i]])
+
+        px = np.array()
+        py = np.array()
+        pz = np.array()
+        pitch = np.array()
+        yaw = np.array()
+        roll= np.array()
+
+        np.append(px, pos0[0])
+        np.append(py, pos0[1])
+        np.append(pz, pos0[2])
+        np.append(pitch, rot0[0])
+        np.append(yaw, rot0[1])
+        np.append(roll, rot0[2])
 
         file_head = f"{save_folder}/head_centered/{file_name}_head_{saccNr}.avi"
         file_gaze = f"{save_folder}/retina_centered/{file_name}_gaze_{saccNr}.avi"
@@ -195,6 +211,13 @@ for i in tqdm(np.arange(int(FRAME_COUNT_HEAD))):
         out_head.write(frameHead)
         out_gaze.write(frameGaze)
 
+        np.append(px, head_df["pos.x"][i])
+        np.append(py, head_df["pos.y"][i])
+        np.append(pz, head_df["pos.z"][i])
+        np.append(pitch, head_df["rot.x"][i])
+        np.append(yaw, head_df["rot.x"][i])
+        np.append(roll, head_df["rot.x"][i])
+
     if i == end:
         time1 = head_df["time"][i]
         pos1 = np.array([head_df["pos.x"][i], head_df["pos.y"][i], head_df["pos.z"][i]])
@@ -203,8 +226,17 @@ for i in tqdm(np.arange(int(FRAME_COUNT_HEAD))):
         vel = (pos1 - pos0) / delta_t
         rot_diff = rot1 - rot0
 
+        np.append(px, pos1[0])
+        np.append(py, pos1[1])
+        np.append(pz, pos1[2])
+        np.append(pitch, rot1[0])
+        np.append(yaw, rot1[1])
+        np.append(roll, rot1[2])
+
         new_row = pd.Series({"file_head": file_head, "file_gaze": file_gaze, "velX": vel[0], "velY": vel[1], "VelZ": vel[2], "pitch": rot_diff[0], "yaw": rot_diff[1], "roll": rot_diff[2]})
         headingData = pd.concat([headingData, new_row.to_frame().T], ignore_index=True)
+
+        print(f"posX: {vel[0]*delta_t:0.2f}, {px.mean():0.2f}, {px.median():0.2f}")
 
         out_head.release()
         out_gaze.release()
