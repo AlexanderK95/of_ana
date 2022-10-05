@@ -243,7 +243,7 @@ def saccade_detection(x, y, time, missing=0.0, minlen=5, maxvel=40, maxacc=340):
 	
 		# detect saccade starts
 		# sacstarts = numpy.where((vel[1+t0i:] > maxvel).astype(int) + (acc[t0i:] > maxacc).astype(int) >= 1)[0]
-		sacstarts = numpy.where((vel[t0i:] > maxvel).astype(int) + (acc[t0i:] > maxacc).astype(int) >= 2)[0]
+		sacstarts = numpy.where((vel[t0i:] > maxvel).astype(int) + (acc[t0i:] > maxacc).astype(int) >= 1)[0]
 		if len(sacstarts) > 0:
 			# timestamp for starting position
 			t1i = t0i + sacstarts[0]

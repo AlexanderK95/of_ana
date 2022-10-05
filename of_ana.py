@@ -3,6 +3,22 @@ import pandas as pd
 import cv2 as cv
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+from scipy.stats.stats import pearsonr 
+
+def divergence_npgrad(flow):
+    flow = np.swapaxes(flow, 0, 1)
+    Fx, Fy = flow[:, :, 0], flow[:, :, 1]
+    dFx_dx = np.gradient(Fx, axis=0)
+    dFy_dy = np.gradient(Fy, axis=1)
+    return dFx_dx + dFy_dy
+
+def curl_npgrad(flow):
+    flow = np.swapaxes(flow, 0, 1)
+    Fx, Fy = flow[:, :, 0], flow[:, :, 1]
+    dFx_dy = np.gradient(Fx, axis=1)
+    dFy_dx = np.gradient(Fy, axis=0)
+    curl = dFy_dx - dFx_dy
+    return curl
 
 def calc_of(video, shouldPlot=False):
     cap = cv.VideoCapture(cv.samples.findFile(video))
@@ -55,10 +71,11 @@ def calc_of(video, shouldPlot=False):
         cnt += 1
     # cv.destroyAllWindows()
     # return flow_all, mean_of
+    cap.release()
     return mean_of
 
 ### Settings ###
-data_file = "Stimuli/20220930-134704_1.csv"
+data_file = "Stimuli/20221005-170121_2.csv"
 
 width = 512
 height = 512
@@ -72,21 +89,72 @@ data_cnt = df.shape[0]
 
 mean_of_head = np.zeros([width, height, 2, data_cnt])
 mean_of_retina = np.zeros([width, height, 2, data_cnt])
+r = np.zeros(data_cnt)
+curl_head = np.zeros([width, height, data_cnt])
+curl_retina = np.zeros([width, height, data_cnt])
+curl_mean_head = np.zeros(data_cnt)
+curl_mean_retina = np.zeros(data_cnt)
+rot = np.zeros(data_cnt)
+
+
+div_head = np.zeros([width, height, data_cnt])
+div_retina = np.zeros([width, height, data_cnt])
+div_mean_head = np.zeros(data_cnt)
+div_mean_retina = np.zeros(data_cnt)
+vel = np.zeros(data_cnt)
+
+
 for sm in tqdm(np.arange(data_cnt)):
-    mean_of_head[:,:,:,sm] = calc_of(df['file_head'][sm])
-    mean_of_retina[:,:,:,sm] = calc_of(df['file_gaze'][sm])
+    flow_head = calc_of(df['file_head'][sm])
+    flow_retina = calc_of(df['file_gaze'][sm])
+    mean_of_head[:,:,:,sm] = flow_head
+    mean_of_retina[:,:,:,sm] = flow_retina
 
-    
+    flow1_centered = flow_head - np.mean(flow_head, axis=(0, 1))
+    flow2_centered = flow_retina - np.mean(flow_retina, axis=(0, 1))
+    inner_product = np.sum(flow1_centered*flow2_centered)
+    r[sm] = inner_product/np.sqrt(np.sum(flow1_centered**2) * np.sum(flow2_centered**2))
+
+    curl_head[:,:,sm] = curl_npgrad(flow_head)
+    curl_retina[:,:,sm] = curl_npgrad(flow_retina)
+    curl_mean_head[sm] = curl_head[:,:,sm].mean()
+    curl_mean_retina[sm] = curl_retina[:,:,sm].mean()
+    rot[sm] = np.sqrt(df['pitch'][sm]**2 + df['yaw'][sm]**2 + df['roll'][sm]**2)
+
+    div_head[:,:,sm] = divergence_npgrad(flow_head)
+    div_retina[:,:,sm] = divergence_npgrad(flow_retina)
+    div_mean_head[sm] = div_head[:,:,sm].mean()
+    div_mean_retina[sm] = div_retina[:,:,sm].mean()
+    vel[sm] = np.sqrt(df['velX'][sm]**2 + df['velY'][sm]**2 + df['VelZ'][sm]**2)
 
 
+curl_rot_corr_head = pearsonr(curl_mean_head, rot)
+curl_rot_corr_retina = pearsonr(curl_mean_retina, rot)
+div_vel_corr_head = pearsonr(div_mean_head, vel)
+div_vel_corr_retina = pearsonr(div_mean_retina, vel)
+print(f"Pearson R (p val) curl - rot | head: {curl_rot_corr_head[0]:0.4f} ({curl_rot_corr_head[1]:0.4f}) retina: {curl_rot_corr_retina[0]:0.4f} ({curl_rot_corr_retina[1]:0.4f})")
+print(f"Pearson R (p val) div - vel | head: {div_vel_corr_head[0]:0.4f} ({div_vel_corr_head[1]:0.4f}) retina: {div_vel_corr_retina[0]:0.4f} ({div_vel_corr_retina[1]:0.4f})")
+# Y, X = np.mgrid[0:512:1, 0:512:1]    
+
+# u = np.sin(X/256 + Y/256)
+# v = np.cos(X/256 - Y/256)
+
+# field2 = np.stack((u, v), axis=-1)
+# plt.streamplot(X, Y, field2[:, :, 0], field2[:, :, 1])
+
+plt.figure()
+plt.boxplot(r)
+plt.show(block=False)
+plt.pause(.001)
 
 if shouldPlot:
-    n = 6
-    samples = df.sample(n=n).index
+    n = 2
+    samples = np.array(df.sample(n=n).index)
+    samples[0] = 18
+    samples[1] = 11
     fig, axs = plt.subplots(n, 1, sharex=True, sharey=True)
     Y, X = np.mgrid[0:512:1, 0:512:1]
     plt.ion
-    plt.show()
     print("now Plotting...")
     for i in np.arange(n):
         Uh = mean_of_head[:,:,0,samples[i]]
@@ -94,17 +162,23 @@ if shouldPlot:
         Ur = mean_of_retina[:,:,0,samples[i]]
         Vr = mean_of_retina[:,:,1,samples[i]]
 
+        flow1 = np.stack((Uh, Vh), axis=-1)
+        flow2 = np.stack((Ur, Vr), axis=-1)
+        flow1_centered = flow1 - np.mean(flow1, axis=(0, 1))
+        flow2_centered = flow2 - np.mean(flow2, axis=(0, 1))
+        inner_product = np.sum(flow1_centered*flow2_centered)
+        r = inner_product/np.sqrt(np.sum(flow1_centered**2) * np.sum(flow2_centered**2))
+
         speedH = np.sqrt(Uh**2 + Vh**2)
         speedR = np.sqrt(Ur**2 + Vr**2)
         lwH = 5*speedH / speedH.max()
         lwR = 5*speedR / speedR.max()
         axs[i].streamplot(X, Y, Uh, Vh, density=[0.5, 1], linewidth=lwH)
-        axs[i].set_title(f"H {samples[i]} (velX {df['velX'][samples[i]]:0.2f}, velY {df['velY'][samples[i]]:0.2f}, VelZ {df['VelZ'][samples[i]]:0.2f}, pitch {df['pitch'][samples[i]]:0.2f}, yaw {df['yaw'][samples[i]]:0.2f}, roll {df['roll'][samples[i]]:0.2f}", fontsize=11)
+        axs[i].set_title(f"H {samples[i]} (velX {df['velX'][samples[i]]:0.2f}, velY {df['velY'][samples[i]]:0.2f}, VelZ {df['VelZ'][samples[i]]:0.2f}, pitch {df['pitch'][samples[i]]:0.2f}, yaw {df['yaw'][samples[i]]:0.2f}, roll {df['roll'][samples[i]]:0.2f}, Corr. {r:0.2f}", fontsize=11)
         axs[i].streamplot(X+650, Y, Ur, Vr, density=[0.5, 1], linewidth=lwR)
-       
-
     plt.ylim(512, 0)
     plt.xlim(0, 512+650)
+    plt.show()
 
 
 body_df = pd.read_csv("Data/20220921-115719_1_body.csv", sep=",")
