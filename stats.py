@@ -149,7 +149,8 @@ body_pos_x = body_df['pos.x']
 head_rot_x = head_df['rot.y']
 gaze_rot_x = body_df['rot.y']
 
-window_length = np.arange(2, 300, 1)
+window_length = np.arange(2, 500, 2)
+window_length = np.unique(((np.arange(10, 500)/10)**2).astype(int))
 signal_length = body_df.shape[0]
 
 snr_body = np.zeros_like(window_length, dtype=float)
@@ -174,16 +175,18 @@ autocorr_body = autocorr1(body_pos_x, window_length)
 autocorr_head = autocorr1(head_rot_x, window_length)
 autocorr_gaze = autocorr1(gaze_rot_x, window_length)
 
+timestep = (body_df['time'].iloc[-1] - body_df['time'].iloc[0]) / body_df.shape[0]
+
 plt.figure()
-plt.plot(snr_body/window_length/snr_body.max())
-plt.plot(snr_head/window_length/snr_head.max())
-plt.plot(snr_gaze/window_length/snr_gaze.max())
+plt.plot(window_length*timestep, snr_body/window_length/snr_body.max())
+plt.plot(window_length*timestep, snr_head/window_length/snr_head.max())
+plt.plot(window_length*timestep, snr_gaze/window_length/snr_gaze.max())
 plt.show()
 
 plt.figure()
-plt.plot(autocorr_body/autocorr_body.max())
-plt.plot(autocorr_head/autocorr_head.max())
-plt.plot(autocorr_gaze/autocorr_gaze.max())
+plt.plot(window_length*timestep, autocorr_body/autocorr_body.max())
+plt.plot(window_length*timestep, autocorr_head/autocorr_head.max())
+plt.plot(window_length*timestep, autocorr_gaze/autocorr_gaze.max())
 plt.show()
 # fig, ax = plt.subplots(1, 2, subplot_kw=dict(projection='polar'))
 # circular_hist(ax[0], phi)
