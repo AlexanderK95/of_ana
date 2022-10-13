@@ -184,6 +184,12 @@ plt.plot(window_length*timestep, snr_gaze/window_length/snr_gaze.max())
 plt.show()
 
 plt.figure()
+plt.plot(window_length*timestep, snr_body/snr_body.max())
+plt.plot(window_length*timestep, snr_head/snr_head.max())
+plt.plot(window_length*timestep, snr_gaze/snr_gaze.max())
+plt.show()
+
+plt.figure()
 plt.plot(window_length*timestep, autocorr_body/autocorr_body.max())
 plt.plot(window_length*timestep, autocorr_head/autocorr_head.max())
 plt.plot(window_length*timestep, autocorr_gaze/autocorr_gaze.max())
