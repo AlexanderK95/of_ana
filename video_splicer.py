@@ -24,7 +24,7 @@ def derivative2(t, x):
 
 
 ### Settings ###
-file_name = "20221005-170121_2"
+file_name = "20221005-141218_2"
 save_folder = "Stimuli_ws"
 split_length = 0.3      # length of image sequences in seconds
 
