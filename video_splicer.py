@@ -137,4 +137,4 @@ for i in tqdm(np.arange(int(FRAME_COUNT_HEAD))):
         if spliceNr == len(split_idx):
             break
 
-headingData.to_csv(f"{save_folder}/{file_name}.csv")
+headingData.to_csv(f"{save_folder}/{file_name}_ws.csv")
