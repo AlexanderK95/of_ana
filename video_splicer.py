@@ -28,111 +28,7 @@ file_name = "20221005-170121_2"
 save_folder = "Stimuli_ws"
 split_length = 0.3      # length of image sequences in seconds
 
-thresh_vel = 200        # velocity threshold for saccade detection in degrees / s
-thresh_acc = 8000        # acceleration threshold for saccade detection degrees / s²
-max_isi = 1             # maximum time between saccades in seconds (isi above that will be excludes for the statistics)
-
-include_saccades = False
-
-shouldPlot = False
-
-### Detecting Saccades ###
-if include_saccades:
-    thresh_vel = 9000000        # velocity threshold for saccade detection in degrees / s
-    thresh_acc = 9000000 
-
-gaze_pos_df = pd.read_csv(f"Data/{file_name}_gaze_hr.csv", sep=",")
-
-ppdh = 14.58
-ppdv = 13.36
-
-t = gaze_pos_df['time']
-x = gaze_pos_df['rot.y']
-y = gaze_pos_df['rot.x']
-
-
-ssac, esac, vel, acc = saccade_detection(savgol_filter(x,5,2), savgol_filter(y,5,2), t, maxvel=thresh_vel, maxacc=thresh_acc, minlen=10/1000)
-# ssac, esac, vel, acc = saccade_detection(x, y, t, maxvel=thresh_vel, maxacc=thresh_acc, minlen=10/1000)
-
-isi = []
-duration = []
-amplitude = []
-split_idx = []
-t0 = esac[0][1]
-for i in np.arange(1,len(esac)):
-    t1 = esac[i][0]
-    if t1-t0 < max_isi and t1-t0 > 0:
-        isi.append(t1-t0)
-    if t1-t0 > 1.3*split_length:
-        split_idx.append(t0)
-    t0 = esac[i][1]
-    duration.append(esac[i][2])
-    amplitude.append(np.sqrt((esac[i][3]-esac[i][5])**2 + (esac[i][4]-esac[i][6])**2))
-
-dy1 = derivative(t,x)    #velocity
-dy2 = derivative(t,y)    #velocity
-# dy1 = derivative2(t,x)    #velocity
-# dy2 = derivative2(t,x)    #velocity
-speed = np.sqrt(dy1**2 + dy2**2)
-
-# speed_filtered = savgol_filter(speed, 4, 2)
-
-# accel_filtered = derivative(x, speed_filtered)
-accel = derivative(t,speed)
-
-# peaks = find_peaks(accel, height=threshold)[0]
-# peaks_filtered = find_peaks(accel_filtered, height=threshold_filtered)[0]
-
-
-isi = np.array(isi)*1000
-duration = np.array(duration)*1000
-amplitude = np.array(amplitude)
-
-
-if shouldPlot:
-    plt.figure()
-    plt.hist(isi, 10, density=False)
-    plt.title(f"ISI Distribution (#Saccades: {isi.size}, Mean: {isi.mean():0.2f} ms)")
-
-    plt.figure()
-    plt.hist(duration, 10, density=False)
-    plt.title(f"Duration Distribution (#Saccades: {duration.size}, Mean: {duration.mean():0.2f} ms)")
-
-    plt.figure()
-    plt.hist(amplitude, 10, density=False)
-    plt.title(f"Amplitude Distribution (#Saccades: {amplitude.size}, Mean: {amplitude.mean():0.2f} °)")
-
-
-    fig, axs = plt.subplots(3,1)
-    axs[0].plot(t,savgol_filter(x,5,2), color='blue')
-    axs[0].plot(t,x, color='cyan')
-    axs[0].plot(t,savgol_filter(y,5,2), color='red')
-    axs[0].plot(t,y, color='orange')
-    for sacc in esac:
-        axs[0].axvline(sacc[0], color='g')
-        axs[0].axvline(sacc[1], color='r')
-    axs[0].set_ylabel('x and y gaze coordinates [°]')
-
-    axs[1].plot(t, speed)
-    axs[1].plot(t, vel)
-    for sacc in esac:
-        axs[1].axvline(sacc[0], color='g')
-        axs[1].axvline(sacc[1], color='r')
-    axs[1].axhline(thresh_vel)
-    axs[1].set_ylabel('velocity [°/2]')
-
-    axs[2].plot(t, accel)
-    axs[2].plot(t, acc)
-    for sacc in esac:
-        axs[2].axvline(sacc[0], color='g')
-        axs[2].axvline(sacc[1], color='r')
-    axs[2].axhline(thresh_acc)
-    axs[2].set_ylabel('acceleration [°/s^2]')
-
-    fig.tight_layout()
-    plt.show()
-
-
+numFrames = 8
 
 ### Splitting Videos in chunks and labeling with heading params ###
 
@@ -156,35 +52,26 @@ assert FRAME_COUNT_HEAD == FRAME_COUNT_GAZE, "Number of frames in head and gaze 
 assert FRAME_COUNT_HEAD == gaze_df.shape[0], "Number of frames does not math the number of data points in the csv files!"
 
 t_vid = gaze_df['time']
-split_idx_hr = np.array(split_idx)
-split_idx = []
-for t in split_idx_hr:
-    tmpArr = np.absolute(t_vid-t)
-    split_idx.append(tmpArr.argmin())
-
-
+split_idx = np.arange(numFrames*3, FRAME_COUNT_HEAD - (FRAME_COUNT_HEAD%numFrames), numFrames+1)
 
 print((gaze_df['time'].iloc[-1]-gaze_df['time'].iloc[0])/gaze_df['time'].size)
 avg_fd = (gaze_df['time'].iloc[-1]-gaze_df['time'].iloc[0])/gaze_df['time'].size
 num_frames = np.ceil(split_length/avg_fd)
 
-if shouldPlot:
-    plt.figure()
-    plt.plot(t)
-    plt.plot(np.arange(0,t.size,t.size/t_vid.size),t_vid)
-    plt.show()
-
 headingData = pd.DataFrame(columns=["file_head", "file_gaze", "velX", "velY", "velZ", "pitch", "yaw", "roll"])
 
-saccNr = 0
+spliceNr = 0
 
+num_frames = numFrames
 
 for i in tqdm(np.arange(int(FRAME_COUNT_HEAD))):
     retHead, frameHead = cap_head.read()
     retGaze, frameGaze = cap_gaze.read()
 
-    start = split_idx[saccNr] - num_frames
-    end = split_idx[saccNr]
+    start = split_idx[spliceNr] - num_frames
+    end = split_idx[spliceNr]
+
+    # print([start, end])
 
     if i == start:
         time0 = head_df["time"][i]
@@ -205,8 +92,8 @@ for i in tqdm(np.arange(int(FRAME_COUNT_HEAD))):
         yaw = np.append(yaw, rot0[1])
         roll = np.append(roll, rot0[2])
 
-        file_head = f"{save_folder}/head_centered/{file_name}_head_{saccNr}.avi"
-        file_gaze = f"{save_folder}/retina_centered/{file_name}_gaze_{saccNr}.avi"
+        file_head = f"{save_folder}/head_centered/{file_name}_head_{spliceNr}.avi"
+        file_gaze = f"{save_folder}/retina_centered/{file_name}_gaze_{spliceNr}.avi"
         out_head = cv.VideoWriter(file_head, cv.VideoWriter_fourcc('M','J','P','G'), num_frames, (FRAME_WIDTH,FRAME_HEIGHT))
         out_gaze = cv.VideoWriter(file_gaze, cv.VideoWriter_fourcc('M','J','P','G'), num_frames, (FRAME_WIDTH,FRAME_HEIGHT))
 
@@ -246,8 +133,8 @@ for i in tqdm(np.arange(int(FRAME_COUNT_HEAD))):
 
         out_head.release()
         out_gaze.release()
-        saccNr += 1
-        if saccNr == len(split_idx):
+        spliceNr += 1
+        if spliceNr == len(split_idx):
             break
 
 headingData.to_csv(f"{save_folder}/{file_name}.csv")
