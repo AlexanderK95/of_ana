@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 from scipy.signal import find_peaks, savgol_filter
 from scipy import signal
+import scipy
 from detect_saccades import splice
 from detectors import saccade_detection
 
@@ -24,7 +25,7 @@ def derivative2(t, x):
 
 
 ### Settings ###
-file_name = "20221005-141218_2"
+file_name = "20221110-174245_1"
 save_folder = "Stimuli_ws"
 split_length = 0.3      # length of image sequences in seconds
 
@@ -36,8 +37,8 @@ body_df = pd.read_csv(f"Data/{file_name}_body.csv", sep=",")
 head_df = pd.read_csv(f"Data/{file_name}_head.csv", sep=",")
 gaze_df = pd.read_csv(f"Data/{file_name}_gaze.csv", sep=",")
 
-gaze_vid = f"Data/{file_name}_gaze_cam.mp4"
-head_vid = f"Data/{file_name}_head_cam.mp4"
+gaze_vid = f"Data/{file_name}_gaze_cam.webm"
+head_vid = f"Data/{file_name}_head_cam.webm"
 
 cap_head = cv.VideoCapture(cv.samples.findFile(head_vid))
 cap_gaze = cv.VideoCapture(cv.samples.findFile(gaze_vid))
@@ -108,8 +109,8 @@ for i in tqdm(np.arange(int(FRAME_COUNT_HEAD))):
         py = np.append(py, head_df["pos.y"][i])
         pz = np.append(pz, head_df["pos.z"][i])
         pitch = np.append(pitch, head_df["rot.x"][i])
-        yaw = np.append(yaw, head_df["rot.x"][i])
-        roll = np.append(roll, head_df["rot.x"][i])
+        yaw = np.append(yaw, head_df["rot.y"][i])
+        roll = np.append(roll, head_df["rot.z"][i])
 
     if i == end:
         time1 = head_df["time"][i]
@@ -126,7 +127,17 @@ for i in tqdm(np.arange(int(FRAME_COUNT_HEAD))):
         yaw = np.append(yaw, rot1[1])
         roll = np.append(roll, rot1[2])
 
-        new_row = pd.Series({"file_head": file_head, "file_gaze": file_gaze, "velX": vel[0], "velY": vel[1], "VelZ": vel[2], "pitch": pitch.mean(), "yaw": yaw.mean(), "roll": roll.mean()})
+        rotation_degrees = yaw.mean()
+        rotation_radians = np.radians(rotation_degrees)
+        rotation_axis = np.array([0, 1, 0])
+        rotation_vector = rotation_radians * rotation_axis
+        rotation = scipy.spatial.transform.Rotation.from_rotvec(rotation_vector)
+        # vel = rotation.apply(vel)
+
+        # yaw = np.arctan2(vel[0], vel[2])/np.pi*180 - yaw.mean()
+
+
+        new_row = pd.Series({"file_head": file_head, "file_gaze": file_gaze, "velX": vel[0], "velY": vel[1], "velZ": vel[2], "pitch": pitch.mean(), "yaw": yaw.mean(), "roll": roll.mean()})
         headingData = pd.concat([headingData, new_row.to_frame().T], ignore_index=True)
 
         # print(f"posX: {vel[0]*delta_t:0.2f}, {px.mean():0.2f}, {np.median(px):0.2f}")
